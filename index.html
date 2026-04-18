@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Expense &amp; Budget Visualizer</title>
+    <link rel="stylesheet" href="css/styles.css" />
+  </head>
+  <body>
+    <header>
+      <h1>Expense &amp; Budget Visualizer</h1>
+      <div class="header-actions">
+        <button
+          type="button"
+          id="toggle-spending-limit"
+          class="btn-header-toggle"
+          aria-label="Toggle spending limit panel"
+          aria-expanded="false"
+          aria-controls="spending-limit-panel"
+        >💰 Limit</button>
+        <button
+          type="button"
+          id="toggle-add-category"
+          class="btn-header-toggle"
+          aria-label="Toggle add category panel"
+          aria-expanded="false"
+          aria-controls="add-category-panel"
+        >🏷️ Category</button>
+        <button
+          type="button"
+          id="theme-toggle"
+          class="btn-header-toggle btn-theme-toggle"
+          aria-label="Switch to dark mode"
+        >🌙 Dark</button>
+      </div>
+    </header>
+
+    <!-- Spending Limit Panel (collapsible, below header) -->
+    <div id="spending-limit-panel" class="header-panel" hidden>
+      <div class="header-panel-inner">
+        <label for="spending-limit-input">Spending Limit ($)</label>
+        <input
+          type="number"
+          id="spending-limit-input"
+          min="0"
+          step="0.01"
+          placeholder="No limit set"
+        />
+        <button type="button" id="clear-spending-limit" class="btn-clear-limit">Clear</button>
+      </div>
+    </div>
+
+    <!-- Add Category Panel (collapsible, below header) -->
+    <div id="add-category-panel" class="header-panel" hidden>
+      <div class="header-panel-inner">
+        <form id="category-form" novalidate>
+          <div class="form-group">
+            <label for="input-category-name">Category Name</label>
+            <input
+              type="text"
+              id="input-category-name"
+              name="category-name"
+              placeholder="e.g. Healthcare"
+              autocomplete="off"
+              aria-describedby="error-category-name"
+            />
+            <span id="error-category-name" class="error-msg" role="alert" aria-live="polite"></span>
+          </div>
+          <button type="submit" class="btn-add">Add Category</button>
+        </form>
+      </div>
+    </div>
+
+    <main>
+      <!-- Balance Display -->
+      <section class="balance-section" aria-labelledby="balance-heading">
+        <h2 id="balance-heading">Total Spent</h2>
+        <p
+          id="balance-display"
+          class="balance-amount"
+          aria-live="polite"
+          aria-atomic="true"
+        >
+          $0.00
+        </p>
+      </section>
+
+      <!-- Input Form -->
+      <section class="form-section" aria-labelledby="form-heading">
+        <h2 id="form-heading">Add Transaction</h2>
+        <form id="transaction-form" novalidate>
+          <div class="form-group">
+            <label for="input-name">Item Name</label>
+            <input
+              type="text"
+              id="input-name"
+              name="name"
+              placeholder="e.g. Coffee"
+              autocomplete="off"
+              aria-describedby="error-name"
+            />
+            <span id="error-name" class="error-msg" role="alert" aria-live="polite"></span>
+          </div>
+
+          <div class="form-group">
+            <label for="input-amount">Amount ($)</label>
+            <input
+              type="number"
+              id="input-amount"
+              name="amount"
+              placeholder="0.00"
+              min="0.01"
+              step="0.01"
+              aria-describedby="error-amount"
+            />
+            <span id="error-amount" class="error-msg" role="alert" aria-live="polite"></span>
+          </div>
+
+          <div class="form-group">
+            <label for="input-category">Category</label>
+            <select id="input-category" name="category" aria-describedby="error-category">
+              <option value="">-- Select category --</option>
+              <option value="Food">Food</option>
+              <option value="Transport">Transport</option>
+              <option value="Fun">Fun</option>
+            </select>
+            <span id="error-category" class="error-msg" role="alert" aria-live="polite"></span>
+          </div>
+
+          <button type="submit" class="btn-add">Add Transaction</button>
+        </form>
+      </section>
+
+      <!-- Transaction List -->
+      <section class="list-section" aria-labelledby="list-heading">
+        <h2 id="list-heading">Transaction History</h2>
+        <div class="sort-control">
+          <label for="sort-control">Sort by:</label>
+          <select id="sort-control">
+            <option value="default">Default</option>
+            <option value="amount-asc">Amount ↑</option>
+            <option value="amount-desc">Amount ↓</option>
+            <option value="category-asc">Category A–Z</option>
+            <option value="category-desc">Category Z–A</option>
+          </select>
+        </div>
+        <ul id="transaction-list" class="transaction-list" aria-label="Transaction history">
+          <!-- Transactions rendered here by renderer.js -->
+        </ul>
+      </section>
+
+      <!-- Monthly Summary -->
+      <section class="monthly-summary-section" aria-labelledby="monthly-summary-heading">
+        <h2 id="monthly-summary-heading">Monthly Summary</h2>
+        <section id="monthly-summary" aria-live="polite" aria-atomic="true">
+          <!-- Rendered by renderer.js -->
+        </section>
+      </section>
+
+      <!-- Pie Chart -->
+      <section class="chart-section" aria-labelledby="chart-heading">
+        <h2 id="chart-heading">Spending by Category</h2>
+        <div class="chart-container">
+          <canvas
+            id="spending-chart"
+            aria-label="Pie chart showing spending distribution by category"
+            role="img"
+          ></canvas>
+          <p id="chart-placeholder" class="chart-placeholder">No transactions yet.</p>
+        </div>
+      </section>
+    </main>
+
+    <!-- Chart.js 4.x via CDN (Requirement 10.2) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.5.0/chart.umd.min.js"></script>
+
+    <!-- App modules -->
+    <script type="module" src="js/app.js"></script>
+  </body>
+</html>

@@ -10,6 +10,13 @@ The app renders four primary UI regions:
 - **Transaction List** — scrollable history with per-row delete
 - **Pie Chart** — spending breakdown by category (powered by Chart.js 4.x via CDN)
 
+Five additional features extend the base app:
+- **Custom Categories** — users can define categories beyond Food, Transport, Fun
+- **Monthly Summary View** — spending grouped and totalled by calendar month
+- **Transaction Sorting** — sort the list by amount or category
+- **Spending Limit Highlight** — visual warning when balance or a transaction exceeds a user-defined limit
+- **Dark/Light Mode Toggle** — theme switching with OS-preference fallback and localStorage persistence
+
 Key design goals:
 - Zero dependencies beyond Chart.js (CDN)
 - All business logic in pure, testable functions
@@ -71,35 +78,62 @@ Holds the canonical in-memory transaction list and exposes pure functions.
   id: string,        // crypto.randomUUID() or Date.now().toString()
   name: string,      // item name
   amount: number,    // positive float
-  category: string   // 'Food' | 'Transport' | 'Fun'
+  category: string   // 'Food' | 'Transport' | 'Fun' | <custom>
 }
 
 // Pure functions
-addTransaction(transactions, newTx)   → Transaction[]
-removeTransaction(transactions, id)   → Transaction[]
-computeBalance(transactions)          → number
-computeCategoryTotals(transactions)   → { [category: string]: number }
+addTransaction(transactions, newTx)              → Transaction[]
+removeTransaction(transactions, id)              → Transaction[]
+computeBalance(transactions)                     → number
+computeCategoryTotals(transactions)              → { [category: string]: number }
+computeMonthlySummary(transactions)              → MonthlySummary[]
+sortTransactions(transactions, criterion, order) → Transaction[]
 ```
+
+`MonthlySummary` shape:
+```js
+{
+  month: string,                          // 'YYYY-MM'
+  label: string,                          // e.g. 'January 2025'
+  total: number,
+  byCategory: { [category: string]: number }
+}
+```
+
+`sortTransactions` supports `criterion` values `'amount'` and `'category'`, and `order` values `'asc'` and `'desc'`. Passing `criterion = 'default'` returns the original insertion order (most recently added first).
 
 ### Validator Module (`validator.js`)
 
 Pure validation functions — no DOM access.
 
 ```js
-validateForm(name, amount, category) → { valid: boolean, errors: { name?, amount?, category? } }
-isValidAmount(value)                 → boolean   // positive finite number
-isNonEmpty(value)                    → boolean   // non-blank string
+validateForm(name, amount, category)       → { valid: boolean, errors: { name?, amount?, category? } }
+validateCategoryName(name, existingList)   → { valid: boolean, error?: string }
+isValidAmount(value)                       → boolean   // positive finite number
+isNonEmpty(value)                          → boolean   // non-blank string
 ```
+
+`validateCategoryName` rejects blank names and case-insensitive duplicates against `existingList`.
 
 ### Storage Module (`storage.js`)
 
 Thin adapter over `localStorage`.
 
 ```js
-STORAGE_KEY = 'expense_transactions'
+STORAGE_KEY           = 'expense_transactions'
+CATEGORIES_KEY        = 'expense_custom_categories'
+SPENDING_LIMIT_KEY    = 'expense_spending_limit'
+THEME_KEY             = 'expense_theme'
 
-loadTransactions()           → Transaction[]   // parse JSON, return [] on error
-saveTransactions(txList)     → void            // JSON.stringify + setItem
+loadTransactions()                    → Transaction[]   // parse JSON, return [] on error
+saveTransactions(txList)              → void            // JSON.stringify + setItem
+loadCustomCategories()                → string[]        // return [] on error
+saveCustomCategories(categories)      → void
+loadSpendingLimit()                   → number | null   // return null if not set
+saveSpendingLimit(limit)              → void
+clearSpendingLimit()                  → void
+loadTheme()                           → 'light' | 'dark' | null
+saveTheme(theme)                      → void
 ```
 
 ### Renderer Module (`renderer.js`)
@@ -107,12 +141,15 @@ saveTransactions(txList)     → void            // JSON.stringify + setItem
 All DOM mutations and Chart.js interactions live here.
 
 ```js
-renderTransactionList(transactions)  → void
-renderBalance(total)                 → void
-renderChart(categoryTotals)          → void   // create or update Chart instance
-renderFormErrors(errors)             → void
-clearFormErrors()                    → void
-resetForm()                          → void
+renderTransactionList(transactions, spendingLimit)  → void   // highlights rows exceeding limit
+renderBalance(total, spendingLimit)                 → void   // highlights balance when over limit
+renderChart(categoryTotals)                         → void   // create or update Chart instance
+renderFormErrors(errors)                            → void
+clearFormErrors()                                   → void
+resetForm()                                         → void
+renderCategoryOptions(categories)                   → void   // rebuilds <select> options
+renderMonthlySummary(summaries)                     → void   // renders Monthly_Summary_View
+renderTheme(theme)                                  → void   // toggles data-theme attribute on <html>
 ```
 
 ### App Entry Point (`app.js`)
@@ -122,7 +159,12 @@ Wires events to the pipeline:
 ```js
 // On DOMContentLoaded
 state = loadTransactions()
-renderAll(state)
+customCategories = loadCustomCategories()
+spendingLimit = loadSpendingLimit()
+theme = loadTheme() ?? detectOsTheme()
+renderTheme(theme)
+renderCategoryOptions([...DEFAULT_CATEGORIES, ...customCategories])
+renderAll(state, spendingLimit)
 
 // On form submit
 errors = validateForm(...)
@@ -130,13 +172,36 @@ if errors → renderFormErrors(errors); return
 tx = buildTransaction(...)
 state = addTransaction(state, tx)
 saveTransactions(state)
-renderAll(state)
+renderAll(state, spendingLimit)
 resetForm()
 
 // On delete click
 state = removeTransaction(state, id)
 saveTransactions(state)
-renderAll(state)
+renderAll(state, spendingLimit)
+
+// On add-category submit
+result = validateCategoryName(name, customCategories)
+if !result.valid → show error; return
+customCategories = [...customCategories, name]
+saveCustomCategories(customCategories)
+renderCategoryOptions([...DEFAULT_CATEGORIES, ...customCategories])
+
+// On sort change
+sortCriterion = event.target.value   // 'default' | 'amount-asc' | 'amount-desc' | 'category-asc' | 'category-desc'
+renderTransactionList(sortTransactions(state, ...), spendingLimit)
+
+// On spending-limit change
+spendingLimit = parseFloat(input.value) || null
+if spendingLimit → saveSpendingLimit(spendingLimit)
+else → clearSpendingLimit()
+renderBalance(computeBalance(state), spendingLimit)
+renderTransactionList(state, spendingLimit)
+
+// On theme toggle
+theme = theme === 'light' ? 'dark' : 'light'
+saveTheme(theme)
+renderTheme(theme)
 ```
 
 ### Chart.js Integration
@@ -160,7 +225,7 @@ interface Transaction {
   id: string;        // unique identifier
   name: string;      // non-empty item description
   amount: number;    // positive finite number (e.g. 12.50)
-  category: 'Food' | 'Transport' | 'Fun';
+  category: string;  // 'Food' | 'Transport' | 'Fun' | <custom>
 }
 ```
 
@@ -172,14 +237,31 @@ type AppState = Transaction[];
 
 ### LocalStorage Schema
 
-Key: `"expense_transactions"`  
-Value: JSON-serialized `Transaction[]`
+Key: `"expense_transactions"` — JSON-serialized `Transaction[]`
 
 ```json
 [
   { "id": "1720000000000", "name": "Coffee", "amount": 3.50, "category": "Food" },
   { "id": "1720000001000", "name": "Bus fare", "amount": 2.00, "category": "Transport" }
 ]
+```
+
+Key: `"expense_custom_categories"` — JSON-serialized `string[]`
+
+```json
+["Groceries", "Healthcare"]
+```
+
+Key: `"expense_spending_limit"` — JSON-serialized `number` (absent when no limit is set)
+
+```json
+200
+```
+
+Key: `"expense_theme"` — `"light"` or `"dark"` (absent when no preference has been saved)
+
+```json
+"dark"
 ```
 
 ### Category Totals (derived)
@@ -190,7 +272,20 @@ interface CategoryTotals {
 }
 ```
 
-This is always derived from `AppState` — never stored independently.
+Always derived from `AppState` — never stored independently.
+
+### Monthly Summary (derived)
+
+```ts
+interface MonthlySummary {
+  month: string;                          // 'YYYY-MM'
+  label: string;                          // e.g. 'January 2025'
+  total: number;
+  byCategory: { [category: string]: number };
+}
+```
+
+Always derived from `AppState` — never stored independently. Months are sorted descending (most recent first).
 
 ---
 
@@ -262,6 +357,38 @@ This is always derived from `AppState` — never stored independently.
 
 ---
 
+### Property 9: Monthly summary totals equal balance
+
+*For any* list of transactions, the sum of all `MonthlySummary.total` values returned by `computeMonthlySummary` should equal `computeBalance` for the same list.
+
+**Validates: Requirements 12.1, 12.5**
+
+---
+
+### Property 10: sortTransactions preserves all transactions
+
+*For any* list of transactions and any valid sort criterion and order, `sortTransactions` should return a list that contains exactly the same transaction ids as the input list (no additions, no removals, no duplicates).
+
+**Validates: Requirements 13.1, 13.5**
+
+---
+
+### Property 11: validateCategoryName rejects duplicates
+
+*For any* non-empty list of existing category names and any new name that matches an existing name (case-insensitive), `validateCategoryName` should return `{ valid: false }`.
+
+**Validates: Requirements 11.3, 11.4**
+
+---
+
+### Property 12: Spending limit highlight consistency
+
+*For any* list of transactions and any positive spending limit, every transaction row whose amount exceeds the limit should be marked as over-budget, and the balance display should be marked as over-budget if and only if `computeBalance` exceeds the limit.
+
+**Validates: Requirements 14.4, 14.5, 14.6**
+
+---
+
 ## Error Handling
 
 | Scenario | Handling |
@@ -269,10 +396,14 @@ This is always derived from `AppState` — never stored independently.
 | Empty name field | Validator returns `errors.name`; inline error shown; form not submitted |
 | Non-positive or non-numeric amount | Validator returns `errors.amount`; inline error shown; form not submitted |
 | No category selected | Validator returns `errors.category`; inline error shown; form not submitted |
-| `localStorage` parse error on load | `loadTransactions` catches JSON parse exception, returns `[]`, app starts fresh |
-| `localStorage` quota exceeded on save | `saveTransactions` wraps `setItem` in try/catch; logs warning to console; in-memory state remains valid |
+| Blank custom category name | `validateCategoryName` returns error; inline error shown; category not added |
+| Duplicate custom category name | `validateCategoryName` returns error (case-insensitive); inline error shown; category not added |
+| `localStorage` parse error on load | `loadTransactions` / `loadCustomCategories` catch JSON parse exception, return `[]`; app starts fresh |
+| `localStorage` quota exceeded on save | All `save*` functions wrap `setItem` in try/catch; log warning to console; in-memory state remains valid |
 | Chart.js not loaded (CDN failure) | `renderChart` checks for `window.Chart` before instantiating; shows static text fallback if unavailable |
 | Delete on non-existent id | `removeTransaction` returns the original list unchanged (no-op) |
+| Invalid spending limit input | Treated as "no limit" — highlights cleared, persisted value removed |
+| No persisted theme preference | `prefers-color-scheme` media query used as fallback |
 
 ---
 
@@ -305,6 +436,10 @@ Tag format for each test: `Feature: expense-budget-visualizer, Property {N}: {pr
 | P6: localStorage round-trip | Generate arbitrary `Transaction[]`; save → load; assert deep equality |
 | P7: addTransaction preserves existing | Generate list + new tx; assert all original ids still present |
 | P8: Transaction list rendering completeness | Generate random `Transaction[]`; render list; assert each row contains name, amount, category, and delete control |
+| P9: Monthly summary totals equal balance | Generate arbitrary `Transaction[]`; assert `sum(summaries.map(s => s.total)) === computeBalance(list)` |
+| P10: sortTransactions preserves all transactions | Generate `Transaction[]` + random criterion/order; assert sorted ids match original ids (same set) |
+| P11: validateCategoryName rejects duplicates | Generate non-empty category list + duplicate name (case-insensitive variants); assert `valid === false` |
+| P12: Spending limit highlight consistency | Generate `Transaction[]` + positive limit; assert highlight flags match `amount > limit` and `balance > limit` |
 
 ### Integration / Smoke Tests
 

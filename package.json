@@ -1,0 +1,25 @@
+{
+  "name": "codingcamp-13apr26-hafidzarrofi",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "vitest run"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hafidz-ar/CodingCamp-13Apr26-hafidzarrofi.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/hafidz-ar/CodingCamp-13Apr26-hafidzarrofi/issues"
+  },
+  "homepage": "https://github.com/hafidz-ar/CodingCamp-13Apr26-hafidzarrofi#readme",
+  "devDependencies": {
+    "fast-check": "^4.7.0",
+    "vitest": "^4.1.4"
+  }
+}
